@@ -1,0 +1,4 @@
+# Required packages for Pokemon Pinball RL with PufferLib
+gymnasium>=0.29.1
+pyboy>=1.4.4
+
