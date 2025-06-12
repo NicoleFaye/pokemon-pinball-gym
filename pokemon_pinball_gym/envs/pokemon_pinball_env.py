@@ -9,8 +9,9 @@ import math
 from gymnasium import spaces
 from pyboy import PyBoy
 from pyboy.plugins.game_wrapper_pokemon_pinball import Stage, BallType, SpecialMode, Maps, Pokemon
-from rewards import RewardShaping
-import functools
+
+from ..rewards import RewardFunction, BasicReward, CatchFocusedReward, ComprehensiveReward
+from ..utils import GameStateTracker, ObservationBuilder, InfoBuilder
 
 
 # Build mappings between enums and sequential indices
@@ -41,13 +42,12 @@ class Actions(enum.Enum):
 class EnvironmentConfig:
     """Configuration class for Pokemon Pinball environment."""
     debug: bool = False
-    headless: bool = False
-    reward_shaping: str = "comprehensive"
+    headless: bool = True
     info_level: int = 0
     frame_skip: int = 4
     visual_mode: str = "screen"  # "screen" or "game_area"
     reduce_screen_resolution: bool = True
-    episode_mode: str = "life"  # "life", "ball", or "game", where ball triggers even if the ball saver is active
+    episode_mode: str = "ball"  # "life", "ball", or "game"
     reset_condition: str = "game"  # "life", "ball", or "game"
 
     @classmethod
@@ -59,250 +59,11 @@ class EnvironmentConfig:
         return cls(**filtered_config)
 
 
-class GameStateTracker:
-    """Tracks game state changes for reward calculation."""
-    
-    def __init__(self):
-        self.reset()
-    
-    def reset(self):
-        """Reset all tracking variables."""
-        self.prev_caught = 0
-        self.prev_evolutions = 0
-        self.prev_stages_completed = 0
-        self.prev_ball_upgrades = 0
-        self.prev_balls_left = 2
-        self.prev_balls_lost_during_saver = 0
-    
-    def to_dict(self) -> Dict[str, int]:
-        """Convert state to dictionary for reward functions."""
-        return {
-            'prev_caught': self.prev_caught,
-            'prev_evolutions': self.prev_evolutions,
-            'prev_stages_completed': self.prev_stages_completed,
-            'prev_ball_upgrades': self.prev_ball_upgrades,
-            'prev_ball_lost_during_saver': self.prev_balls_lost_during_saver,
-        }
-    
-    def update(self, game_wrapper):
-        """Update tracking state based on current game wrapper state."""
-        self.prev_caught = game_wrapper.pokemon_caught_in_session
-        self.prev_evolutions = game_wrapper.evolution_success_count
-        
-        self.prev_stages_completed = (
-            game_wrapper.diglett_stages_completed +
-            game_wrapper.gengar_stages_completed +
-            game_wrapper.meowth_stages_completed +
-            game_wrapper.seel_stages_completed +
-            game_wrapper.mewtwo_stages_completed
-        )
-        
-        self.prev_ball_upgrades = (
-            game_wrapper.great_ball_upgrades +
-            game_wrapper.ultra_ball_upgrades +
-            game_wrapper.master_ball_upgrades
-        )
-        
-        self.prev_balls_left = game_wrapper.balls_left
-        self.prev_balls_lost_during_saver = game_wrapper.lost_ball_during_saver
-
-
-class ObservationBuilder:
-    """Builds observations based on configuration and game state."""
-    
-    def __init__(self, config: EnvironmentConfig):
-        self.config = config
-        self.info_level = config.info_level
-        self.visual_mode = config.visual_mode
-        self.reduce_screen_resolution = config.reduce_screen_resolution
-        
-        # Set output shape based on visual mode
-        if self.visual_mode == "game_area":
-            self.output_shape = (16, 20)
-        else:  # screen mode
-            if self.reduce_screen_resolution:
-                self.output_shape = (72, 80)
-            else:
-                self.output_shape = (144, 160)
-    
-    def create_observation_space(self) -> gym.spaces.Space:
-        """Create observation space based on info level."""
-        observations_dict = {}
-        
-        # Base visual observation
-        observations_dict['visual_representation'] = spaces.Box(
-            low=0, high=255, shape=self.output_shape, dtype=np.uint8
-        )
-        
-        if self.info_level == 0:
-            return observations_dict['visual_representation']
-        
-        # Level 1: Ball position and velocity
-        if self.info_level >= 1:
-            obs_shape = (1,)
-            observations_dict.update({
-                'ball_x': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_y': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_x_velocity': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_y_velocity': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-            })
-        
-        # Level 2: Game state
-        if self.info_level >= 2:
-            observations_dict.update({
-                'current_stage': spaces.Discrete(len(STAGE_ENUMS)),
-                'ball_type': spaces.Discrete(len(BALL_TYPE_ENUMS)),
-                'special_mode': spaces.Discrete(len(SpecialMode)),
-                'special_mode_active': spaces.Discrete(2),
-                'saver_active': spaces.Discrete(2),
-            })
-        
-        # Level 3: Detailed information
-        if self.info_level >= 3:
-            observations_dict.update({
-                'pikachu_saver_charge': spaces.Discrete(16),
-            })
-        
-        return spaces.Dict(observations_dict)
-    
-    def get_visual_observation(self, pyboy, game_wrapper):
-        """Get visual observation based on visual mode."""
-        if self.visual_mode == "game_area":
-            return game_wrapper.game_area()
-        else:
-            # Get screen and convert to grayscale
-            screen_img = np.array(pyboy.screen.ndarray[:, :, :3], copy=True)
-            screen_img = np.mean(screen_img, axis=2, keepdims=False).astype(np.uint8)
-            
-            if self.reduce_screen_resolution:
-                screen_img = screen_img[::2, ::2]
-            
-            return screen_img
-    
-    def build_observation(self, pyboy, game_wrapper) -> Dict[str, np.ndarray]:
-        """Build complete observation dictionary."""
-        visual_obs = self.get_visual_observation(pyboy, game_wrapper)
-        observation = {
-            "visual_representation": np.asarray(visual_obs, dtype=np.uint8),
-        }
-        
-        if self.info_level == 0:
-            return observation.get('visual_representation')
-        
-        # Add ball information
-        observation.update({
-            "ball_x": np.array([float(game_wrapper.ball_x)], dtype=np.float32),
-            "ball_y": np.array([float(game_wrapper.ball_y)], dtype=np.float32),
-            "ball_x_velocity": np.array([float(game_wrapper.ball_x_velocity)], dtype=np.float32),
-            "ball_y_velocity": np.array([float(game_wrapper.ball_y_velocity)], dtype=np.float32),
-        })
-        
-        if self.info_level == 1:
-            return observation
-        
-        # Add game state information
-        if self.info_level >= 2:
-            current_stage_idx = STAGE_TO_INDEX.get(game_wrapper.current_stage, 0)
-            ball_type_idx = BALL_TYPE_TO_INDEX.get(game_wrapper.ball_type, 0)
-            
-            observation.update({
-                "current_stage": np.array([current_stage_idx], dtype=np.int32),
-                "ball_type": np.array([ball_type_idx], dtype=np.int32),
-                "special_mode": np.array([int(game_wrapper.special_mode)], dtype=np.int32),
-                "special_mode_active": np.array([int(game_wrapper.special_mode_active)], dtype=np.int32),
-                "saver_active": np.array([int(game_wrapper.ball_saver_seconds_left > 0)], dtype=np.int32),
-            })
-        
-        # Add detailed information
-        if self.info_level >= 3:
-            observation["pikachu_saver_charge"] = np.array([int(game_wrapper.pikachu_saver_charge)], dtype=np.int32)
-        
-        return observation
-
-
-class InfoBuilder:
-    """Builds info dictionary for environment feedback."""
-    
-    @staticmethod
-    def build_info(game_wrapper, fitness, frames_played, episodes_completed, episode_count, 
-                   episode_mode, reset_condition, episode_complete=False, high_score=False) -> Dict[str, Any]:
-        """Build comprehensive info dictionary."""
-        # Basic info
-        info = {
-            'score': [float(game_wrapper.score)],
-            'episode_return': [float(fitness)],
-            'episode_length': [float(frames_played)],
-            'agent_episodes_completed': [float(episodes_completed)],
-            'episode_id': [float(episode_count)],
-            'episode_complete': [episode_complete],
-        }
-        
-        # Game progress info
-        info.update({
-            'pokemon_caught': [float(game_wrapper.pokemon_caught_in_session)],
-            'evolutions': [float(game_wrapper.evolution_success_count)],
-            'ball_saver_active': [float(game_wrapper.ball_saver_seconds_left > 0)],
-            'current_stage': [str(game_wrapper.current_stage)],
-            'ball_type': [str(game_wrapper.ball_type)],
-            'special_mode_active': [float(game_wrapper.special_mode_active)],
-            'pikachu_saver_charge': [float(game_wrapper.pikachu_saver_charge)]
-        })
-        
-        # Stage completion info
-        total_stages = (
-            game_wrapper.diglett_stages_completed +
-            game_wrapper.gengar_stages_completed +
-            game_wrapper.meowth_stages_completed +
-            game_wrapper.seel_stages_completed +
-            game_wrapper.mewtwo_stages_completed
-        )
-        
-        info.update({
-            'diglett_stages': [float(game_wrapper.diglett_stages_completed)],
-            'gengar_stages': [float(game_wrapper.gengar_stages_completed)],
-            'meowth_stages': [float(game_wrapper.meowth_stages_completed)],
-            'seel_stages': [float(game_wrapper.seel_stages_completed)],
-            'mewtwo_stages': [float(game_wrapper.mewtwo_stages_completed)],
-            'total_stages_completed': [float(total_stages)]
-        })
-        
-        # Ball upgrade info
-        total_upgrades = (
-            game_wrapper.great_ball_upgrades +
-            game_wrapper.ultra_ball_upgrades +
-            game_wrapper.master_ball_upgrades
-        )
-        
-        info.update({
-            'great_ball_upgrades': [float(game_wrapper.great_ball_upgrades)],
-            'ultra_ball_upgrades': [float(game_wrapper.ultra_ball_upgrades)],
-            'master_ball_upgrades': [float(game_wrapper.master_ball_upgrades)],
-            'total_ball_upgrades': [float(total_upgrades)]
-        })
-        
-        # Ball position and velocity
-        info.update({
-            'ball_x': [float(game_wrapper.ball_x)],
-            'ball_y': [float(game_wrapper.ball_y)],
-            'ball_x_velocity': [float(game_wrapper.ball_x_velocity)],
-            'ball_y_velocity': [float(game_wrapper.ball_y_velocity)]
-        })
-        
-        # Episode configuration
-        info.update({
-            'episode_mode': [episode_mode],
-            'reset_condition': [reset_condition],
-            'balls_left': [float(game_wrapper.balls_left)]
-        })
-        
-        if high_score:
-            info['high_score'] = [True]
-            
-        return info
-
 class RenderWrapper(gym.Wrapper):
+    """Wrapper to add rendering capability."""
+    
     def __init__(self, env):
-        super().__init__(env)  # This is crucial!
+        super().__init__(env)
 
     @property
     def render_mode(self):
@@ -317,8 +78,15 @@ class PokemonPinballEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
     instance_count = 0
     
-    def __init__(self, rom_path="pokemon_pinball.gbc", config=None):
-        """Initialize the Pokemon Pinball environment."""
+    def __init__(self, rom_path="pokemon_pinball.gbc", config=None, reward_function=None):
+        """
+        Initialize the Pokemon Pinball environment.
+        
+        Args:
+            rom_path: Path to the Pokemon Pinball ROM
+            config: EnvironmentConfig instance or dict
+            reward_function: RewardFunction instance for calculating rewards
+        """
         super().__init__()
         
         # Handle config
@@ -328,8 +96,16 @@ class PokemonPinballEnv(gym.Env):
             config = EnvironmentConfig.from_dict(config)
         self.config = config
 
-        #self.emulated = True
-        #self.num_agents = config.num_agents
+        # Handle reward function
+        if reward_function is not None:
+            self.reward_function = reward_function
+        else:
+            # Default to basic reward
+            self.reward_function = ComprehensiveReward()
+        
+        # Validate reward function
+        if not isinstance(self.reward_function, RewardFunction):
+            raise TypeError("reward_function must be an instance of RewardFunction")
         
         # Instance tracking
         PokemonPinballEnv.instance_count += 1
@@ -341,9 +117,6 @@ class PokemonPinballEnv(gym.Env):
         # Initialize components
         self.state_tracker = GameStateTracker()
         self.obs_builder = ObservationBuilder(self.config)
-        
-        # Initialize reward shaping
-        self.reward_shaping = self._get_reward_function(config.reward_shaping)
         
         # Initialize tracking variables
         self._init_tracking_variables()
@@ -379,16 +152,6 @@ class PokemonPinballEnv(gym.Env):
         self._game_wrapper = self.pyboy.game_wrapper
         self.pyboy.set_emulation_speed(0)
     
-    def _get_reward_function(self, reward_name: str):
-        """Get reward shaping function by name."""
-        reward_functions = {
-            'basic': RewardShaping.basic,
-            'catch_focused': RewardShaping.catch_focused,
-            'comprehensive': RewardShaping.comprehensive,
-            'progressive': RewardShaping.progressive,
-        }
-        return reward_functions.get(reward_name)
-    
     def _init_tracking_variables(self):
         """Initialize tracking variables."""
         self._fitness = 0
@@ -420,20 +183,17 @@ class PokemonPinballEnv(gym.Env):
         """Check if a life was just lost."""
         return self._game_wrapper.balls_left < self.state_tracker.prev_balls_left
     
-    def _calculate_fitness(self, reward_shaping_func=None) -> float:
-        """Calculate fitness/reward with optional reward shaping."""
+    def _calculate_fitness(self) -> float:
+        """Calculate fitness/reward using the configured reward function."""
         # Update fitness tracking
         self._previous_fitness = self._fitness
         self._fitness = self._game_wrapper.score
         
-        # If no reward shaping, return simple score difference
-        if reward_shaping_func is None:
-            return self._fitness - self._previous_fitness
-        
-        # Apply reward shaping with game state tracking
+        # Get game state for reward function
         game_state = self.state_tracker.to_dict()
         
-        reward = reward_shaping_func(
+        # Call the reward function
+        reward = self.reward_function.calculate_reward(
             self._fitness,
             self._previous_fitness,
             self._game_wrapper,
@@ -502,8 +262,8 @@ class PokemonPinballEnv(gym.Env):
                 self.pyboy.tick(1, not self.config.headless, False)
         self._frames_played += ticks
         
-        # Calculate reward
-        reward = self._calculate_fitness(self.reward_shaping)
+        # Calculate reward using the configured reward function
+        reward = self._calculate_fitness()
         
         # Check if episode is done
         done = self._is_episode_done()
