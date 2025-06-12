@@ -19,11 +19,9 @@ setup(
     url="https://github.com/NicoleFaye/pokemon-pinball-gym",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
@@ -36,7 +34,7 @@ setup(
     install_requires=requirements,
     extras_require={
     },
-    keywords="reinforcement learning, pokemon, pinball, gymnasium, rl, game",
+    keywords=["RL", "Pokemon", "Pinball", "Gymnasium", "AI"],
     project_urls={
         "Bug Reports": "https://github.com/NicoleFaye/pokemon-pinball-gym/issues",
         "Source": "https://github.com/NicoleFaye/pokemon-pinball-gym",
