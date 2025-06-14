@@ -291,9 +291,6 @@ class PokemonPinballEnv(gym.Env):
         """Reset the environment."""
         super().reset(seed=seed)
         
-        # Reset tracking
-        self.state_tracker.reset()
-        
         # Handle reset condition
         self._handle_reset_condition()
         
@@ -333,12 +330,15 @@ class PokemonPinballEnv(gym.Env):
         if self.config.reset_condition == "life":
             if game_wrapper.game_over or self.life_lost:
                 game_wrapper.reset_game()
+                self.state_tracker.reset()
         elif self.config.reset_condition == "ball":
             if game_wrapper.game_over or self.ball_lost:
                 game_wrapper.reset_game()
+                self.state_tracker.reset()
         elif self.config.reset_condition == "game":
             if game_wrapper.game_over:
                 game_wrapper.reset_game()
+                self.state_tracker.reset()
     
     def render(self, mode="human"):
         """Render the environment."""
