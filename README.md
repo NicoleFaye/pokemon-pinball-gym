@@ -174,6 +174,10 @@ class MyCustomReward(RewardFunction):
         }
 ```
 
+#### Available Game Wrapper Properties
+
+The `game_wrapper` parameter provides access to numerous Pokemon Pinball game properties for creating custom reward functions. For a complete list of available properties and methods, reference the [PyBoy Pokemon Pinball wrapper source code](https://github.com/Baekalfen/PyBoy/blob/master/pyboy/plugins/game_wrapper_pokemon_pinball.py).
+
 ## Observations
 
 Observation structure depends on the `info_level` setting:
