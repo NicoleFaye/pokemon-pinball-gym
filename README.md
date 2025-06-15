@@ -93,9 +93,9 @@ config = EnvironmentConfig(
 - `2`: Level 1 + game state (stage, ball type, special modes)
 - `3`: Level 2 + detailed information (Pikachu saver charge)
 
-**Episode Modes:**
-- `"life"`: Episode ends when ball is lost during saver
-- `"ball"`: Episode ends when any ball is lost
+**Episode Modes and Rest Conditions:**
+- `"life"`: Episode ends when ball is lost without an active saver
+- `"ball"`: Episode ends when any ball is lost regardless of saver
 - `"game"`: Episode ends when game over
 
 ## Actions
