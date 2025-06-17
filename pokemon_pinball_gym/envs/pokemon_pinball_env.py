@@ -49,6 +49,7 @@ class EnvironmentConfig:
     reduce_screen_resolution: bool = True
     episode_mode: str = "ball"  # "life", "ball", or "game"
     reset_condition: str = "game"  # "life", "ball", or "game"
+    grayscale: bool = False
 
     @classmethod
     def from_dict(cls, config_dict):
