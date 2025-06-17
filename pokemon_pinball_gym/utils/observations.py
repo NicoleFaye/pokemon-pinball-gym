@@ -38,6 +38,12 @@ class ObservationBuilder:
                 self.output_shape = (72, 80)
             else:
                 self.output_shape = (144, 160)
+        
+        # Add missing 3rd dimension
+        if config.grayscale:
+            self.output_shape += (1,) 
+        else: 
+            self.output_shape += (3,)
     
     def create_observation_space(self) -> gym.spaces.Space:
         """Create observation space based on info level."""
@@ -79,19 +85,30 @@ class ObservationBuilder:
         
         return spaces.Dict(observations_dict)
     
-    def get_visual_observation(self, pyboy, game_wrapper):
-        """Get visual observation based on visual mode."""
-        if self.visual_mode == "game_area":
-            return game_wrapper.game_area()
+def get_visual_observation(self, pyboy, game_wrapper):
+    """Get visual observation based on visual mode."""
+    if self.visual_mode == "game_area":
+        game_area = game_wrapper.game_area()
+        return game_area + (1,)
+        
+    else:
+        # Get screen RGB
+        screen_img = np.array(pyboy.screen.ndarray[:, :, :3], copy=True)
+        
+        # Reduce resolution if needed (do this on RGB first)
+        if self.reduce_screen_resolution:
+            screen_img = screen_img[::2, ::2]
+        
+        if self.config.grayscale:
+            # Convert to grayscale and add channel dimension
+            screen_img = np.mean(screen_img, axis=2, keepdims=True).astype(np.uint8)
+            # Result: (72, 80, 1) or (144, 160, 1)
         else:
-            # Get screen and convert to grayscale
-            screen_img = np.array(pyboy.screen.ndarray[:, :, :3], copy=True)
-            screen_img = np.mean(screen_img, axis=2, keepdims=False).astype(np.uint8)
-            
-            if self.reduce_screen_resolution:
-                screen_img = screen_img[::2, ::2]
-            
-            return screen_img
+            # Keep as RGB
+            screen_img = screen_img.astype(np.uint8)
+            # Result: (72, 80, 3) or (144, 160, 3)
+        
+        return screen_img
     
     def build_observation(self, pyboy, game_wrapper) -> Dict[str, np.ndarray]:
         """Build complete observation dictionary."""
