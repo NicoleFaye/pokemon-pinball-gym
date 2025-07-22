@@ -154,19 +154,24 @@ class PokemonPinballEnv(gym.Env):
         self.pyboy.set_emulation_speed(0)
     
     def _init_tracking_variables(self):
-        """Initialize tracking variables."""
+        """Initialize tracking variables (called once during __init__)."""
+        # Per-episode variables (will be reset each episode)
         self._fitness = 0
         self._previous_fitness = 0
         self._frames_played = 0
+        
+        # Persistent variables (survive across episodes)
         self._high_score = 0
         self._episode_count = 0
         self.episodes_completed = 0
         self._initialized = False
         
-        # Stuck detection (if needed)
+        # Stuck detection constants (never change)
         self.stuck_detection_window = 100
         self.stuck_detection_threshold = 5.0
         self.stuck_detection_reward_threshold = 100
+        
+        # Stuck detection state (reset each episode)
         self.ball_position_history = []
         self.last_score = 0
     
@@ -248,8 +253,9 @@ class PokemonPinballEnv(gym.Env):
         """Take a step in the environment."""
         assert self.action_space.contains(action), f"{action} ({type(action)}) invalid"
         
-        # Save current state before taking action
-        self.state_tracker.prev_balls_left = self._game_wrapper.balls_left
+        # Save current state BEFORE taking action for done detection
+        prev_balls_left = self._game_wrapper.balls_left
+        prev_balls_lost_during_saver = self._game_wrapper.lost_ball_during_saver
         
         # Execute action
         self._execute_action(action)
@@ -263,12 +269,14 @@ class PokemonPinballEnv(gym.Env):
                 self.pyboy.tick(1, not self.config.headless, False)
         self._frames_played += ticks
         
-        # Calculate reward using the configured reward function
-        reward = self._calculate_fitness()
-        
-        # Check if episode is done
+        # Check if episode is done (compare current state to previous)
+        self.state_tracker.prev_balls_left = prev_balls_left
+        self.state_tracker.prev_balls_lost_during_saver = prev_balls_lost_during_saver
         done = self._is_episode_done()
         truncated = False
+        
+        # Calculate reward using the configured reward function
+        reward = self._calculate_fitness()
         
         # Get observation and info
         observation = self.obs_builder.build_observation(self.pyboy, self._game_wrapper)
@@ -279,38 +287,37 @@ class PokemonPinballEnv(gym.Env):
             self._high_score = self._game_wrapper.score
             high_score = True
         
-        # Only provide info when episode ends, following Pokemon Red's pattern
-        info = {}
-        if done:
-            info = InfoBuilder.build_info(
-                self._game_wrapper, self._fitness, self._frames_played,
-                self.episodes_completed, episode_complete=done
-            )
-        
+        # Build info using InfoBuilder
+        info = InfoBuilder.build_info(
+            self._game_wrapper, self._fitness, self._frames_played,
+            self.episodes_completed, episode_complete=done
+        )
+
         return observation, reward, done, truncated, info
     
     def reset(self, seed=None, options=None):
         """Reset the environment."""
         super().reset(seed=seed)
         
-        # Handle reset condition
+        # Handle reset condition (may reset game and state tracker)
         self._handle_reset_condition()
         
-        # Reset episode tracking
+        # Reset per-episode tracking variables
         self._fitness = 0
         self._previous_fitness = 0
         self._frames_played = 0
         
-        # Reset detection
+        # Reset stuck detection
         self.ball_position_history = []
         self.last_score = 0
         
-        # Update counters
-        self.episodes_completed += 1
+        # Update episode counters (increment, don't reset)
+        if self._initialized:  # Only increment after first initialization
+            self.episodes_completed += 1
         self._episode_count += 1
         self._initialized = True
         
-        # Update state tracker
+        # Initialize state tracker's previous values for the new episode
         self.state_tracker.prev_balls_left = self._game_wrapper.balls_left
         self.state_tracker.prev_balls_lost_during_saver = self._game_wrapper.lost_ball_during_saver
         
