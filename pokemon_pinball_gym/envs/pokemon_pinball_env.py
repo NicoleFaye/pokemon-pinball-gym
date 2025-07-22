@@ -139,7 +139,7 @@ class PokemonPinballEnv(gym.Env):
         """Initialize PyBoy instance."""
         import os
         pid = os.getpid()
-        print(f"Creating PokemonPinballEnv instance {self.instance_id} in process {pid}")
+        #print(f"Creating PokemonPinballEnv instance {self.instance_id} in process {pid}")
         
         window_type = "null" if self.config.headless else "SDL2"
         self.pyboy = PyBoy(rom_path, window=window_type, sound_emulated=False)
