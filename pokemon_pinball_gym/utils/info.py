@@ -6,24 +6,15 @@ class InfoBuilder:
     """Builds a minimal info dict for the Pokemon Pinball env."""
 
     @staticmethod
-    def build_info(game_wrapper, fitness: float, frames_played: int,
-                   episodes_completed: int, episode_complete: bool = False
-                  ) -> Dict[str, Any]:
+    def build_info(game_wrapper ) -> Dict[str, Any]:
         """
         Args:
             game_wrapper: PyBoy wrapper
             fitness: agent’s current fitness/score
-            frames_played: frames so far in the episode
-            episodes_completed: total episodes finished
-            episode_complete: did we just end an episode?
         """
         # core metrics
         info = {
             'score': game_wrapper.score,
-            'fitness': fitness,
-            'frames_played': frames_played,
-            'episodes_completed': episodes_completed,
-            'episode_complete': episode_complete,
         }
 
         # aggregate progress

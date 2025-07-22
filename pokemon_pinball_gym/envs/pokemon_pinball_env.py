@@ -286,12 +286,12 @@ class PokemonPinballEnv(gym.Env):
         if done and self._game_wrapper.score > self._high_score:
             self._high_score = self._game_wrapper.score
             high_score = True
-        
+        info= {}
         # Build info using InfoBuilder
-        info = InfoBuilder.build_info(
-            self._game_wrapper, self._fitness, self._frames_played,
-            self.episodes_completed, episode_complete=done
-        )
+        if done:
+            info = InfoBuilder.build_info(
+                self._game_wrapper
+            )
 
         return observation, reward, done, truncated, info
     
