@@ -316,13 +316,8 @@ class PokemonPinballEnv(gym.Env):
         
         # Get initial observation and info
         observation = self.obs_builder.build_observation(self.pyboy, self._game_wrapper)
-        info = InfoBuilder.build_info(
-            self._game_wrapper, self._fitness, self._frames_played,
-            self.episodes_completed, self._episode_count,
-            self.config.episode_mode, self.config.reset_condition
-        )
         
-        return observation, info
+        return observation, {}
     
     def _handle_reset_condition(self):
         """Handle reset based on reset condition configuration."""
