@@ -279,12 +279,13 @@ class PokemonPinballEnv(gym.Env):
             self._high_score = self._game_wrapper.score
             high_score = True
         
-        info = InfoBuilder.build_info(
-            self._game_wrapper, self._fitness, self._frames_played,
-            self.episodes_completed, self._episode_count,
-            self.config.episode_mode, self.config.reset_condition,
-            episode_complete=done, high_score=high_score
-        )
+        # Only provide info when episode ends, following Pokemon Red's pattern
+        info = {}
+        if done:
+            info = InfoBuilder.build_info(
+                self._game_wrapper, self._fitness, self._frames_played,
+                self.episodes_completed, episode_complete=done
+            )
         
         return observation, reward, done, truncated, info
     
