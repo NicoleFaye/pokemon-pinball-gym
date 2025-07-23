@@ -97,6 +97,7 @@ class ObservationBuilder:
             
             # Reduce resolution if needed (do this on RGB first)
             if self.reduce_screen_resolution:
+                screen_img = np.expand_dims(pyboy.screen.ndarray[:, :, 1], axis=-1)
                 screen_img = screen_img[::2, ::2]
             
             if self.config.grayscale:

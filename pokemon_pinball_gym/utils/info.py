@@ -15,6 +15,8 @@ class InfoBuilder:
         # core metrics
         info = {
             'score': game_wrapper.score,
+            'pokemon_seen': game_wrapper.pokemon_seen_in_session,
+            'pokemon_caught': game_wrapper.pokemon_caught_in_session,
         }
 
         # aggregate progress
@@ -33,5 +35,6 @@ class InfoBuilder:
 
         info['total_stages_completed'] = total_stages
         info['total_ball_upgrades'] = total_upgrades
+        info['lost_ball_during_saver']= game_wrapper.lost_ball_during_saver
 
         return info
