@@ -75,21 +75,22 @@ class CatchFocusedReward(RewardFunction):
 
 
 class ComprehensiveReward(RewardFunction):
-    """Comprehensive reward function with multiple objectives."""
+    """Comprehensive reward function with multiple objectives,
+       plus a time‑survival bonus to lengthen episodes."""
     
-    def __init__(self, score_scale: float = 0.3, catch_bonus: float = 5.0,
-                 evolution_bonus: float = 10.0, stage_bonus: float = 8.0,
-                 ball_upgrade_bonus: float = 3.0, saver_penalty: float = -3.0):
+    def __init__(self,
+                 score_scale: float = 0.3,
+                 catch_bonus: float = 5.0,
+                 evolution_bonus: float = 10.0,
+                 stage_bonus: float = 8.0,
+                 ball_upgrade_bonus: float = 3.0,
+                 saver_penalty: float = -3.0,
+                 time_step_bonus: float = 0.001,
+                 max_bonus_frames: int = 10000):
         """
-        Initialize ComprehensiveReward.
-        
         Args:
-            score_scale: Base scaling for score rewards
-            catch_bonus: Bonus for catching Pokemon
-            evolution_bonus: Bonus for Pokemon evolutions
-            stage_bonus: Bonus for completing stages
-            ball_upgrade_bonus: Bonus for ball upgrades
-            saver_penalty: Penalty for losing ball during saver
+            time_step_bonus: small reward per frame to encourage survival
+            max_bonus_frames: only give time_step_bonus while frames_played <= this
         """
         self.score_scale = score_scale
         self.catch_bonus = catch_bonus
@@ -97,32 +98,31 @@ class ComprehensiveReward(RewardFunction):
         self.stage_bonus = stage_bonus
         self.ball_upgrade_bonus = ball_upgrade_bonus
         self.saver_penalty = saver_penalty
+        
+        # new attributes
+        self.time_step_bonus = time_step_bonus
+        self.max_bonus_frames = max_bonus_frames
     
-    def calculate_reward(self, current_fitness: float, previous_fitness: float,
-                        game_wrapper: Any, frames_played: int,
-                        prev_state: Optional[Dict[str, Any]] = None) -> float:
-        """Calculate comprehensive reward with multiple objectives."""
+    def calculate_reward(self,
+                         current_fitness: float,
+                         previous_fitness: float,
+                         game_wrapper: Any,
+                         frames_played: int,
+                         prev_state: Optional[Dict[str, Any]] = None) -> float:
         if prev_state is None:
             prev_state = self.get_initial_state()
-            
-        # Base score reward with logarithmic scaling
+        
+        # 1) Base score reward (log‐scaled)
         score_diff = current_fitness - previous_fitness
-        if score_diff > 0:
-            score_reward = self.score_scale * np.log(1 + score_diff / 50)
-        else:
-            score_reward = 0
+        score_reward = self.score_scale * np.log(1 + score_diff / 50) if score_diff > 0 else 0
         
         additional_reward = 0
         
-        # Pokemon catch reward
-        if game_wrapper.pokemon_caught_in_session > prev_state.get('prev_caught', 0):
+        # 2) Catch, evolution, stage, ball‑upgrade, saver loss (unchanged)…
+        if game_wrapper.pokemon_caught_in_session > prev_state['prev_caught']:
             additional_reward += self.catch_bonus
-        
-        # Evolution reward
-        if game_wrapper.evolution_success_count > prev_state.get('prev_evolutions', 0):
+        if game_wrapper.evolution_success_count > prev_state['prev_evolutions']:
             additional_reward += self.evolution_bonus
-        
-        # Stage completion reward
         total_stages = (
             game_wrapper.diglett_stages_completed +
             game_wrapper.gengar_stages_completed +
@@ -130,34 +130,35 @@ class ComprehensiveReward(RewardFunction):
             game_wrapper.seel_stages_completed +
             game_wrapper.mewtwo_stages_completed
         )
-        if total_stages > prev_state.get('prev_stages_completed', 0):
+        if total_stages > prev_state['prev_stages_completed']:
             additional_reward += self.stage_bonus
         
-        # Ball upgrade reward with scaling based on ball type
         ball_upgrades = (
             game_wrapper.great_ball_upgrades +
             game_wrapper.ultra_ball_upgrades +
             game_wrapper.master_ball_upgrades
         )
-        if ball_upgrades > prev_state.get('prev_ball_upgrades', 0):
-            # Scale reward based on ball type
+        if ball_upgrades > prev_state['prev_ball_upgrades']:
+            # scale by ball type
             if game_wrapper.ball_type == BallType.GREATBALL:
-                upgrade_reward = self.ball_upgrade_bonus
+                additional_reward += self.ball_upgrade_bonus
             elif game_wrapper.ball_type == BallType.ULTRABALL:
-                upgrade_reward = self.ball_upgrade_bonus * 2
+                additional_reward += 2 * self.ball_upgrade_bonus
             elif game_wrapper.ball_type == BallType.MASTERBALL:
-                upgrade_reward = self.ball_upgrade_bonus * 3
+                additional_reward += 3 * self.ball_upgrade_bonus
             else:
-                upgrade_reward = self.ball_upgrade_bonus
-            
-            additional_reward += upgrade_reward
+                additional_reward += self.ball_upgrade_bonus
         
-        # Ball loss penalty
-        saver_penalty = 0
-        if game_wrapper.lost_ball_during_saver > prev_state.get('prev_ball_lost_during_saver', 0):
-            saver_penalty = self.saver_penalty
+        saver_penalty = (
+            self.saver_penalty
+            if game_wrapper.lost_ball_during_saver > prev_state['prev_ball_lost_during_saver']
+            else 0
+        )
         
-        return score_reward + additional_reward + saver_penalty
+        # 3) small per-frame survival bonus up to a limit
+        time_bonus = self.time_step_bonus if frames_played <= self.max_bonus_frames else 0
+        
+        return score_reward + additional_reward + saver_penalty + time_bonus
     
     def get_initial_state(self) -> Dict[str, Any]:
         return {
@@ -169,13 +170,16 @@ class ComprehensiveReward(RewardFunction):
         }
     
     def get_info(self) -> Dict[str, Any]:
-        return {
+        info = {
             'reward_function': 'ComprehensiveReward',
-            'description': 'Multi-objective reward balancing score, catches, evolutions, and stages',
+            'description': 'Multi-objective reward balancing score, catches, evolutions, stages, and survival',
             'score_scale': self.score_scale,
             'catch_bonus': self.catch_bonus,
             'evolution_bonus': self.evolution_bonus,
             'stage_bonus': self.stage_bonus,
             'ball_upgrade_bonus': self.ball_upgrade_bonus,
-            'saver_penalty': self.saver_penalty
+            'saver_penalty': self.saver_penalty,
+            'time_step_bonus': self.time_step_bonus,
+            'max_bonus_frames': self.max_bonus_frames,
         }
+        return info
