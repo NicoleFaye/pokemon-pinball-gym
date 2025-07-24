@@ -89,7 +89,7 @@ class ObservationBuilder:
 
     def build_observation(self, pyboy, game_wrapper) :#-> Dict[str, np.ndarray]:
         """Build complete observation dictionary."""
-        visual_obs = self.get_visual_observation(pyboy, game_wrapper)
+        visual_obs = self.render()#self.get_visual_observation(pyboy, game_wrapper)
         observation = {
             "visual_representation": np.asarray(visual_obs, dtype=np.uint8),
         }
