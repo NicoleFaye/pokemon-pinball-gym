@@ -51,6 +51,7 @@ class EnvironmentConfig:
     reset_condition: str = "game"  # "life", "ball", or "game"
     grayscale: bool = False
 
+
     @classmethod
     def from_dict(cls, config_dict):
         """Create EnvironmentConfig from dictionary, ignoring extra keys."""
@@ -117,7 +118,7 @@ class PokemonPinballEnv(gym.Env):
         
         # Initialize components
         self.state_tracker = GameStateTracker()
-        self.obs_builder = ObservationBuilder(self.config)
+        self.obs_builder = ObservationBuilder(self.config, pyboy=self.pyboy)
         
         # Initialize tracking variables
         self._init_tracking_variables()
