@@ -37,7 +37,7 @@ class ObservationBuilder:
         #initialize empty array for frame stacking using np of size n_frame_stack
         height = PYBOY_OUTPUT_HEIGHT // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_HEIGHT
         width = PYBOY_OUTPUT_WIDTH // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_WIDTH
-        self.frame_stack = np.zeros((self.n_frame_stack, height, width), dtype=np.uint8)
+        self.frame_stack = np.zeros((height, width, self.n_frame_stack), dtype=np.uint8)
         # Set output shape based on visual mode
         if self.visual_mode == "game_area":
             self.output_shape = (16, 20, self.n_frame_stack)  # game area size
@@ -101,7 +101,7 @@ class ObservationBuilder:
         if self.info_level == 0:
             #roll observation onto frame stack and add new frame using render
             self.frame_stack = np.roll(self.frame_stack, shift=-1, axis=0)
-            self.frame_stack[-1] = observation["visual_representation"]
+            self.frame_stack[:,:,-1:] = observation["visual_representation"]
             return self.frame_stack
            
             #return observation.get('visual_representation')
