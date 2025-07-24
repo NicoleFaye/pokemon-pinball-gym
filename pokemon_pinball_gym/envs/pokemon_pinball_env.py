@@ -45,6 +45,7 @@ class EnvironmentConfig:
     headless: bool = True
     info_level: int = 0
     frame_skip: int = 4
+    frame_stack: int = 4
     visual_mode: str = "screen"  # "screen" or "game_area"
     reduce_screen_resolution: bool = True
     episode_mode: str = "ball"  # "life", "ball", or "game"

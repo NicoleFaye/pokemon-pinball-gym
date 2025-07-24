@@ -14,6 +14,9 @@ STAGE_TO_INDEX = {stage: idx for idx, stage in enumerate(STAGE_ENUMS)}
 BALL_TYPE_ENUMS = list(BallType)
 BALL_TYPE_TO_INDEX = {ball_type: idx for idx, ball_type in enumerate(BALL_TYPE_ENUMS)}
 
+PYBOY_OUTPUT_HEIGHT = 144
+PYBOY_OUTPUT_WIDTH = 160
+
 
 class ObservationBuilder:
     """Builds observations based on configuration and game state."""
@@ -29,16 +32,17 @@ class ObservationBuilder:
         self.config = config
         self.info_level = config.info_level
         self.visual_mode = config.visual_mode
+        self.n_frame_stack = config.frame_stack
         self.reduce_screen_resolution = config.reduce_screen_resolution
-        
+        #initialize empty array for frame stacking using np of size n_frame_stack
+        height = PYBOY_OUTPUT_HEIGHT // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_HEIGHT
+        width = PYBOY_OUTPUT_WIDTH // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_WIDTH
+        self.frame_stack = np.zeros((self.n_frame_stack, height, width), dtype=np.uint8)
         # Set output shape based on visual mode
         if self.visual_mode == "game_area":
-            self.output_shape = (16, 20)
+            self.output_shape = (16, 20, self.n_frame_stack)  # game area size
         else:  # screen mode
-            if self.reduce_screen_resolution:
-                self.output_shape = (72, 80, 1)
-            else:
-                self.output_shape = (144, 160,1)
+            self.output_shape = (height, width, self.n_frame_stack) 
             
     def create_observation_space(self) -> gym.spaces.Space:
         """Create observation space based on info level."""
@@ -95,7 +99,11 @@ class ObservationBuilder:
         }
         
         if self.info_level == 0:
-            return self.render()
+            #roll observation onto frame stack and add new frame using render
+            self.frame_stack = np.roll(self.frame_stack, shift=-1, axis=0)
+            self.frame_stack[-1] = observation["visual_representation"]
+            return self.frame_stack
+           
             #return observation.get('visual_representation')
 
         # Ignoring below this point for now, 
