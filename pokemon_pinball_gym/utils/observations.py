@@ -52,6 +52,8 @@ class ObservationBuilder:
         if self.info_level == 0:
             return observations_dict['visual_representation']
         
+        # ignore below this point for now, as we are not using it
+
         # Level 1: Ball position and velocity
         if self.info_level >= 1:
             obs_shape = (1,)
