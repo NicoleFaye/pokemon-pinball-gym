@@ -20,6 +20,8 @@ PYBOY_OUTPUT_WIDTH = 160
 PYBOY_GAME_AREA_HEIGHT = 16
 PYBOY_GAME_AREA_WIDTH = 20
 
+COLOR_CHANNEL_INDEX = 1
+
 
 class ObservationBuilder:
     """Builds observations based on configuration and game state."""
@@ -95,7 +97,7 @@ class ObservationBuilder:
         return spaces.Dict(observations_dict)
 
     def render(self):
-        screen = np.expand_dims(self.pyboy.screen.ndarray[:, :, 1], axis=-1)
+        screen = np.expand_dims(self.pyboy.screen.ndarray[:, :, COLOR_CHANNEL_INDEX], axis=-1)
         screen = screen[::2, ::2]
         return screen
 
