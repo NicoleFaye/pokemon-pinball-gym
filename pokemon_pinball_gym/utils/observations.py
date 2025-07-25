@@ -17,6 +17,9 @@ BALL_TYPE_TO_INDEX = {ball_type: idx for idx, ball_type in enumerate(BALL_TYPE_E
 PYBOY_OUTPUT_HEIGHT = 144
 PYBOY_OUTPUT_WIDTH = 160
 
+PYBOY_GAME_AREA_HEIGHT = 16
+PYBOY_GAME_AREA_WIDTH = 20
+
 
 class ObservationBuilder:
     """Builds observations based on configuration and game state."""
@@ -40,7 +43,7 @@ class ObservationBuilder:
         self.render_frame_stack = np.zeros((height, width, self.n_frame_stack), dtype=np.uint8)
         # Set output shape based on visual mode
         if self.visual_mode == "game_area":
-            self.output_shape = (16, 20, self.n_frame_stack)  
+            self.output_shape = (PYBOY_GAME_AREA_HEIGHT, PYBOY_GAME_AREA_WIDTH, self.n_frame_stack)  
         else:  
             self.output_shape = (height, width, self.n_frame_stack)
 
@@ -108,9 +111,6 @@ class ObservationBuilder:
         observation = {
             "visual_representation": self.render_frame_stack
         }         
-            #return observation.get('visual_representation')
-
-        # Ignoring below this point for now, 
 
         self.coord_frame_stack = np.roll(self.coord_frame_stack, shift=-1, axis=-1)
         self.coord_frame_stack[0, -1] = float(game_wrapper.ball_x)
