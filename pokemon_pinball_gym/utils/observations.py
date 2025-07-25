@@ -30,19 +30,22 @@ class ObservationBuilder:
         """
         self.pyboy = pyboy
         self.config = config
-        self.info_level = config.info_level
+        self.observation_info_level = config.observation_info_level
         self.visual_mode = config.visual_mode
         self.n_frame_stack = config.frame_stack
         self.reduce_screen_resolution = config.reduce_screen_resolution
         #initialize empty array for frame stacking using np of size n_frame_stack
         height = PYBOY_OUTPUT_HEIGHT // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_HEIGHT
         width = PYBOY_OUTPUT_WIDTH // 2 if self.reduce_screen_resolution else PYBOY_OUTPUT_WIDTH
-        self.frame_stack = np.zeros((height, width, self.n_frame_stack), dtype=np.uint8)
+        self.render_frame_stack = np.zeros((height, width, self.n_frame_stack), dtype=np.uint8)
         # Set output shape based on visual mode
         if self.visual_mode == "game_area":
-            self.output_shape = (16, 20, self.n_frame_stack)  # game area size
-        else:  # screen mode
-            self.output_shape = (height, width, self.n_frame_stack) 
+            self.output_shape = (16, 20, self.n_frame_stack)  
+        else:  
+            self.output_shape = (height, width, self.n_frame_stack)
+
+        self.coord_frame_stack = np.zeros((2,self.n_frame_stack), dtype=np.float32)
+        self.vel_frame_stack = np.zeros((2,self.n_frame_stack), dtype=np.float32)  
             
     def create_observation_space(self) -> gym.spaces.Space:
         """Create observation space based on info level."""
@@ -53,23 +56,25 @@ class ObservationBuilder:
             low=0, high=255, shape=self.output_shape, dtype=np.uint8
         )
         
-        if self.info_level == 0:
+        if self.observation_info_level == 0:
             return observations_dict['visual_representation']
         
         # ignore below this point for now, as we are not using it
 
-        # Level 1: Ball position and velocity
-        if self.info_level >= 1:
-            obs_shape = (1,)
+        obs_shape = (1,self.n_frame_stack)
+        # Level 1: Ball position
+        if self.observation_info_level >= 1:
             observations_dict.update({
-                'ball_x': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_y': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_x_velocity': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
-                'ball_y_velocity': spaces.Box(low=-128, high=128, shape=obs_shape, dtype=np.float32),
+                'coords': spaces.Box(low=-128, high=128, shape=(2, self.n_frame_stack), dtype=np.float32),
+            })
+        # Level 2: Ball velocity
+        if self.observation_info_level >= 2:
+            observations_dict.update({
+                'velocity': spaces.Box(low=-128, high=128, shape=(2, self.n_frame_stack), dtype=np.float32),
             })
         
-        # Level 2: Game state
-        if self.info_level >= 2:
+        # Level 3: Game state information
+        if self.observation_info_level >= 3:
             observations_dict.update({
                 'current_stage': spaces.Discrete(len(STAGE_ENUMS)),
                 'ball_type': spaces.Discrete(len(BALL_TYPE_ENUMS)),
@@ -79,7 +84,7 @@ class ObservationBuilder:
             })
         
         # Level 3: Detailed information
-        if self.info_level >= 3:
+        if self.observation_info_level >= 4:
             observations_dict.update({
                 'pikachu_saver_charge': spaces.Discrete(16),
             })
@@ -93,35 +98,40 @@ class ObservationBuilder:
 
     def build_observation(self, pyboy, game_wrapper) :#-> Dict[str, np.ndarray]:
         """Build complete observation dictionary."""
-        visual_obs = self.render()#self.get_visual_observation(pyboy, game_wrapper)
-        observation = {
-            "visual_representation": np.asarray(visual_obs, dtype=np.uint8),
-        }
         
-        if self.info_level == 0:
-            #roll observation onto frame stack and add new frame using render
-            self.frame_stack = np.roll(self.frame_stack, shift=-1, axis=0)
-            self.frame_stack[:,:,-1:] = observation["visual_representation"]
-            return self.frame_stack
-           
+        #roll observation onto frame stack and add new frame using render
+        self.render_frame_stack = np.roll(self.render_frame_stack, shift=-1, axis=-1)
+        self.render_frame_stack[:,:,-1:] = self.render()
+        if self.observation_info_level == 0:
+            return self.render_frame_stack
+
+        observation = {
+            "visual_representation": self.render_frame_stack
+        }         
             #return observation.get('visual_representation')
 
         # Ignoring below this point for now, 
 
+        self.coord_frame_stack = np.roll(self.coord_frame_stack, shift=-1, axis=-1)
+        self.coord_frame_stack[0, -1] = float(game_wrapper.ball_x)
+        self.coord_frame_stack[1, -1] = float(game_wrapper.ball_y)
 
         # Add ball information
         observation.update({
-            "ball_x": np.array([float(game_wrapper.ball_x)], dtype=np.float32),
-            "ball_y": np.array([float(game_wrapper.ball_y)], dtype=np.float32),
-            "ball_x_velocity": np.array([float(game_wrapper.ball_x_velocity)], dtype=np.float32),
-            "ball_y_velocity": np.array([float(game_wrapper.ball_y_velocity)], dtype=np.float32),
+            "coords": self.coord_frame_stack
         })
         
-        if self.info_level == 1:
-            return observation
         
+        if self.observation_info_level >= 2:
+            self.vel_frame_stack = np.roll(self.vel_frame_stack, shift=-1, axis=-1)
+            self.vel_frame_stack[0, -1] = float(game_wrapper.ball_x_velocity)
+            self.vel_frame_stack[1, -1] = float(game_wrapper.ball_y_velocity)
+            observation.update({
+                "velocity": self.vel_frame_stack
+            })
+
         # Add game state information
-        if self.info_level >= 2:
+        if self.observation_info_level >= 3:
             current_stage_idx = STAGE_TO_INDEX.get(game_wrapper.current_stage, 0)
             ball_type_idx = BALL_TYPE_TO_INDEX.get(game_wrapper.ball_type, 0)
             
@@ -134,7 +144,7 @@ class ObservationBuilder:
             })
         
         # Add detailed information
-        if self.info_level >= 3:
+        if self.observation_info_level >= 4:
             observation["pikachu_saver_charge"] = np.array([int(game_wrapper.pikachu_saver_charge)], dtype=np.int32)
         
         return observation

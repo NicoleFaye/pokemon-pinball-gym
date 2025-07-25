@@ -43,7 +43,7 @@ class EnvironmentConfig:
     """Configuration class for Pokemon Pinball environment."""
     debug: bool = False
     headless: bool = True
-    info_level: int = 0
+    observation_info_level: int = 0
     frame_skip: int = 4
     frame_stack: int = 4
     visual_mode: str = "screen"  # "screen" or "game_area"
