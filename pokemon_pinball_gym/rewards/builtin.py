@@ -86,7 +86,7 @@ class ComprehensiveReward(RewardFunction):
                  ball_upgrade_bonus: float = 3.0,
                  saver_penalty: float = -3.0,
                  time_step_bonus: float = 0.001,
-                 max_bonus_frames: int = 10000):
+                 max_bonus_frames: int = 100000):
         """
         Args:
             time_step_bonus: small reward per frame to encourage survival
