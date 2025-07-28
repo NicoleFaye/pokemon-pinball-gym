@@ -64,22 +64,25 @@ class ObservationBuilder:
         if self.observation_info_level == 0:
             return observations_dict['visual_representation']
         
-        # ignore below this point for now, as we are not using it
-
-        obs_shape = (1,self.n_frame_stack)
-        # Level 1: Ball position
+        # Level 1: Current stage information for help with camera positioning
         if self.observation_info_level >= 1:
+            observations_dict.update({
+                'current_stage': spaces.Discrete(9),  # 0: Bottom, 1: Top
+            })
+
+        # Level 2: Ball position
+        if self.observation_info_level >= 2:
             observations_dict.update({
                 'coords': spaces.Box(low=-128, high=128, shape=(2, self.n_frame_stack), dtype=np.float32),
             })
-        # Level 2: Ball velocity
-        if self.observation_info_level >= 2:
+        # Level 3: Ball velocity
+        if self.observation_info_level >= 3:
             observations_dict.update({
                 'velocity': spaces.Box(low=-128, high=128, shape=(2, self.n_frame_stack), dtype=np.float32),
             })
         
-        # Level 3: Game state information
-        if self.observation_info_level >= 3:
+        # Level 4: Game state information
+        if self.observation_info_level >= 4:
             observations_dict.update({
                 'current_stage': spaces.Discrete(len(STAGE_ENUMS)),
                 'ball_type': spaces.Discrete(len(BALL_TYPE_ENUMS)),
@@ -88,8 +91,8 @@ class ObservationBuilder:
                 'saver_active': spaces.Discrete(2),
             })
         
-        # Level 3: Detailed information
-        if self.observation_info_level >= 4:
+        # Level 5: Detailed information
+        if self.observation_info_level >= 5:
             observations_dict.update({
                 'pikachu_saver_charge': spaces.Discrete(16),
             })
@@ -114,17 +117,21 @@ class ObservationBuilder:
             "visual_representation": self.render_frame_stack
         }         
 
-        self.coord_frame_stack = np.roll(self.coord_frame_stack, shift=-1, axis=-1)
-        self.coord_frame_stack[0, -1] = float(game_wrapper.ball_x)
-        self.coord_frame_stack[1, -1] = float(game_wrapper.ball_y)
+        if self.observation_info_level >= 1:
+            observation.update({"current_stage": np.array([STAGE_TO_INDEX.get(game_wrapper.current_stage, 0)], dtype=np.int32)})
 
-        # Add ball information
-        observation.update({
-            "coords": self.coord_frame_stack
-        })
-        
-        
         if self.observation_info_level >= 2:
+            self.coord_frame_stack = np.roll(self.coord_frame_stack, shift=-1, axis=-1)
+            self.coord_frame_stack[0, -1] = float(game_wrapper.ball_x)
+            self.coord_frame_stack[1, -1] = float(game_wrapper.ball_y)
+
+            # Add ball information
+            observation.update({
+                "coords": self.coord_frame_stack
+            })
+        
+        
+        if self.observation_info_level >= 3:
             self.vel_frame_stack = np.roll(self.vel_frame_stack, shift=-1, axis=-1)
             self.vel_frame_stack[0, -1] = float(game_wrapper.ball_x_velocity)
             self.vel_frame_stack[1, -1] = float(game_wrapper.ball_y_velocity)
@@ -133,7 +140,7 @@ class ObservationBuilder:
             })
 
         # Add game state information
-        if self.observation_info_level >= 3:
+        if self.observation_info_level >= 4:
             current_stage_idx = STAGE_TO_INDEX.get(game_wrapper.current_stage, 0)
             ball_type_idx = BALL_TYPE_TO_INDEX.get(game_wrapper.ball_type, 0)
             
@@ -146,7 +153,7 @@ class ObservationBuilder:
             })
         
         # Add detailed information
-        if self.observation_info_level >= 4:
+        if self.observation_info_level >= 5:
             observation["pikachu_saver_charge"] = np.array([int(game_wrapper.pikachu_saver_charge)], dtype=np.int32)
         
         return observation
