@@ -45,6 +45,9 @@ class ObservationBuilder:
             "visual_representation": np.zeros(self.output_shape, dtype=np.uint8)
         }
 
+        if self.observation_info_level >= 1:
+            self.frame_stacks["current_stage"] = np.zeros((1, self.n_frame_stack), dtype=np.int32)
+
         if self.observation_info_level >= 2:
             self.frame_stacks["coords"] = np.zeros((2, self.n_frame_stack), dtype=np.float32)
 
@@ -63,9 +66,9 @@ class ObservationBuilder:
             return observations_dict['visual_representation']
 
         if self.observation_info_level >= 1:
-            observations_dict.update({
-                'current_stage': spaces.Discrete(9),
-            })
+            observations_dict['current_stage'] = spaces.Box(
+                low=0, high=len(STAGE_ENUMS) - 1, shape=(1, self.n_frame_stack), dtype=np.int32
+            )
 
         if self.observation_info_level >= 2:
             observations_dict['coords'] = spaces.Box(low=-128, high=128, shape=(2, self.n_frame_stack), dtype=np.float32)
@@ -110,7 +113,8 @@ class ObservationBuilder:
 
         if self.observation_info_level >= 1:
             stage_idx = STAGE_TO_INDEX.get(game_wrapper.current_stage, 0)
-            observation["current_stage"] = np.array([stage_idx], dtype=np.int32)
+            self._update_stack("current_stage", np.array([stage_idx], dtype=np.int32))
+            observation["current_stage"] = self.frame_stacks["current_stage"]
 
         if self.observation_info_level >= 2:
             coords = np.array([game_wrapper.ball_x, game_wrapper.ball_y], dtype=np.float32)
