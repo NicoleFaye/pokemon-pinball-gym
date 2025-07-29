@@ -324,7 +324,7 @@ class PokemonPinballEnv(gym.Env):
         self.state_tracker.prev_balls_lost_during_saver = self._game_wrapper.lost_ball_during_saver
         
         # Get initial observation and info
-        observation = self.obs_builder.build_observation(self.pyboy, self._game_wrapper)
+        observation = self.obs_builder.build_observation(self._game_wrapper)
         
         return observation, {}
     
