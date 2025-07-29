@@ -99,7 +99,7 @@ class ObservationBuilder:
         self.frame_stacks[key] = np.roll(stack, shift=-1, axis=-1)
         self.frame_stacks[key][..., -1] = value
 
-    def build_observation(self, pyboy, game_wrapper):
+    def build_observation(self, game_wrapper):
         """Build complete observation dictionary."""
 
         rendered_frame = self.render()

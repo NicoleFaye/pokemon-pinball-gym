@@ -281,7 +281,7 @@ class PokemonPinballEnv(gym.Env):
         reward = self._calculate_fitness()
         
         # Get observation and info
-        observation = self.obs_builder.build_observation(self.pyboy, self._game_wrapper)
+        observation = self.obs_builder.build_observation(self._game_wrapper)
         
         # Build info
         high_score = False
