@@ -127,8 +127,6 @@ class PokemonPinballEnv(gym.Env):
         # Set up gym spaces
         self.action_space = spaces.Discrete(len(Actions))
         self.observation_space = self.obs_builder.create_observation_space()
-        self.single_action_space = spaces.Discrete(len(Actions))
-        self.single_observation_space = self.obs_builder.create_observation_space()
         
         # Start the game
         self._game_wrapper.start_game()
