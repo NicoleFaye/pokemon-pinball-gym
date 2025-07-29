@@ -78,7 +78,6 @@ class ObservationBuilder:
 
         if self.observation_info_level >= 4:
             observations_dict.update({
-                'current_stage': spaces.Discrete(len(STAGE_ENUMS)),
                 'ball_type': spaces.Discrete(len(BALL_TYPE_ENUMS)),
                 'special_mode': spaces.Discrete(len(SpecialMode)),
                 'special_mode_active': spaces.Discrete(2),
@@ -128,7 +127,6 @@ class ObservationBuilder:
 
         if self.observation_info_level >= 4:
             observation.update({
-                "current_stage": np.array([stage_idx], dtype=np.int32),
                 "ball_type": np.array([BALL_TYPE_TO_INDEX.get(game_wrapper.ball_type, 0)], dtype=np.int32),
                 "special_mode": np.array([int(game_wrapper.special_mode)], dtype=np.int32),
                 "special_mode_active": np.array([int(game_wrapper.special_mode_active)], dtype=np.int32),
